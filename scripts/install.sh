@@ -79,8 +79,8 @@ try_download_binary() {
   return 1
 }
 
-# Run in place when invoked from a checkout
-if [ "$DIR_GIVEN" -eq 0 ] && ([ -f ./packages/cli/src/cli.ts ] || [ -f ./src/cli.ts ]) && [ -f ./package.json ]; then
+# Run in place when invoked from a checkout (unless explicit mode specified)
+if [ -z "$INSTALL_MODE" ] && [ "$DIR_GIVEN" -eq 0 ] && ([ -f ./packages/cli/src/cli.ts ] || [ -f ./src/cli.ts ]) && [ -f ./package.json ]; then
   INSTALL_DIR="$PWD"
   INSTALL_MODE="source"
 fi
