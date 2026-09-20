@@ -93,6 +93,6 @@ describe("mcp tool schemas", () => {
         expect(Object.keys(schema), `${name} must not accept ${key}`).not.toContain(key);
       }
     }
-    expect(Object.keys(toolSchemas)).toHaveLength(7);
+    expect(Object.keys(toolSchemas)).toHaveLength(11);
   });
 });

@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import { Client } from "ssh2";
 import type { VmConfig } from "./config.ts";
 import { shQuote } from "./safety.ts";
+import { MAX_EDIT_BYTES, MAX_READ_BYTES, assertTextBuffer, buildRgCommand } from "./files.ts";
 
 export type ExecResult = { code: number; stdout: string; stderr: string };
 
@@ -100,4 +101,51 @@ export async function sshPull(cfg: VmConfig, remotePath: string, localPath: stri
   } finally {
     client.end();
   }
+}
+
+export async function sshReadText(cfg: VmConfig, remotePath: string): Promise<string> {
+  const client = await connect(cfg);
+  try {
+    const sftp = await new Promise<any>((resolve, reject) =>
+      client.sftp((err, s) => (err ? reject(err) : resolve(s))),
+    );
+    const buf = await new Promise<Buffer>((resolve, reject) =>
+      sftp.readFile(remotePath, (e: Error | null, b: Buffer) => (e ? reject(e) : resolve(b))),
+    );
+    sftp.end();
+    if (buf.length > MAX_READ_BYTES) throw new Error(`file too large (${buf.length} bytes, cap ${MAX_READ_BYTES}) — pull it instead`);
+    assertTextBuffer(buf);
+    return buf.toString("utf8");
+  } finally {
+    client.end();
+  }
+}
+
+export async function sshWriteText(cfg: VmConfig, remotePath: string, text: string): Promise<void> {
+  const buf = Buffer.from(text, "utf8");
+  if (buf.length > MAX_EDIT_BYTES) throw new Error(`write too large (${buf.length} bytes, cap ${MAX_EDIT_BYTES}) — push it instead`);
+  const client = await connect(cfg);
+  try {
+    const sftp = await new Promise<any>((resolve, reject) =>
+      client.sftp((err, s) => (err ? reject(err) : resolve(s))),
+    );
+    await new Promise<void>((resolve, reject) =>
+      sftp.writeFile(remotePath, buf, (e: Error | null) => (e ? reject(e) : resolve())),
+    );
+    sftp.end();
+  } finally {
+    client.end();
+  }
+}
+
+export async function sshSearch(
+  cfg: VmConfig,
+  pattern: string,
+  opts?: { path?: string; glob?: string | string[]; limit?: number; cwd?: string },
+): Promise<ExecResult> {
+  const r = await sshExec(cfg, buildRgCommand(pattern, opts), 60_000, { cwd: opts?.cwd });
+  if (/command not found|unknown command/i.test(r.stderr) && /rg/.test(r.stderr + r.stdout)) {
+    throw new Error("ripgrep (rg) not installed on VM — run: sudo apt install ripgrep");
+  }
+  return r;
 }

@@ -31,19 +31,38 @@ jobs:
         run: |
           bun test packages/cli
 
+      - name: Fetch all OpenTUI native packages
+        run: |
+          # The TUI is bundled into the binaries. Bun prunes unreachable native
+          # branches per target via --define (see scripts/build-binary.sh), but
+          # the bundler must still resolve every branch — bun only installs the
+          # current platform's native package, so fetch the rest from npm.
+          CORE_VER=$(bun --eval 'console.log(require("./node_modules/@opentui/core/package.json").version)')
+          echo "opentui core $CORE_VER"
+          mkdir -p node_modules/@opentui
+          for p in core-linux-x64 core-linux-x64-musl core-linux-arm64 core-linux-arm64-musl core-darwin-arm64 core-darwin-x64 core-win32-x64 core-win32-arm64; do
+            if [ -d "node_modules/@opentui/$p" ]; then echo "present: $p"; continue; fi
+            echo "fetching: @opentui/$p@$CORE_VER"
+            curl -fsSL "https://registry.npmjs.org/@opentui%2f$p/-/$p-$CORE_VER.tgz" -o /tmp/$p.tgz
+            mkdir -p "node_modules/@opentui/$p"
+            tar xzf /tmp/$p.tgz -C "node_modules/@opentui/$p" --strip-components=1
+          done
+
       - name: Compile all platform binaries
         run: |
           mkdir -p dist
+          # scripts/build-binary.sh bundles the OpenTUI TUI per target (TARGET
+          # selects --target plus process.platform/arch defines for pruning).
           echo "Compiling Linux x64..."
-          bun build ./packages/cli/src/cli.ts --compile --target=bun-linux-x64 --outfile ./dist/vm-connect-linux-x64
+          TARGET=bun-linux-x64 OUTFILE=./dist/vm-connect-linux-x64 bash scripts/build-binary.sh
           echo "Compiling Linux arm64..."
-          bun build ./packages/cli/src/cli.ts --compile --target=bun-linux-arm64 --outfile ./dist/vm-connect-linux-arm64
+          TARGET=bun-linux-arm64 OUTFILE=./dist/vm-connect-linux-arm64 bash scripts/build-binary.sh
           echo "Compiling macOS Apple Silicon (arm64)..."
-          bun build ./packages/cli/src/cli.ts --compile --target=bun-darwin-arm64 --outfile ./dist/vm-connect-darwin-arm64
+          TARGET=bun-darwin-arm64 OUTFILE=./dist/vm-connect-darwin-arm64 bash scripts/build-binary.sh
           echo "Compiling macOS Intel (x64)..."
-          bun build ./packages/cli/src/cli.ts --compile --target=bun-darwin-x64 --outfile ./dist/vm-connect-darwin-x64
+          TARGET=bun-darwin-x64 OUTFILE=./dist/vm-connect-darwin-x64 bash scripts/build-binary.sh
           echo "Compiling Windows x64..."
-          bun build ./packages/cli/src/cli.ts --compile --target=bun-windows-x64 --outfile ./dist/vm-connect-windows-x64.exe
+          TARGET=bun-windows-x64 OUTFILE=./dist/vm-connect-windows-x64.exe bash scripts/build-binary.sh
 
       - name: Generate Checksums
         run: |

@@ -18,6 +18,7 @@ import { TerminalSimulator } from "@/components/terminal-simulator";
 import { ToolsSpecTable } from "@/components/tools-spec-table";
 import { SafetyDeck } from "@/components/safety-deck";
 import { AgentConfigurator } from "@/components/agent-configurator";
+import { AgentPromptSetup } from "@/components/agent-prompt-setup";
 import { ArchitectureFlow } from "@/components/architecture-flow";
 
 export default function Home() {
@@ -196,6 +197,11 @@ export default function Home() {
         {/* Agent Config Generator */}
         <section className="space-y-3">
           <AgentConfigurator />
+        </section>
+
+        {/* One-Prompt Agent Setup */}
+        <section className="space-y-3">
+          <AgentPromptSetup />
         </section>
       </main>
 

@@ -7,8 +7,8 @@
     "vm-connect": "./src/cli.ts"
   },
   "scripts": {
-    "build": "bun build ./src/cli.ts --target bun --minify --outdir ./dist",
-    "build:binary": "bun build ./src/cli.ts --compile --outfile ./dist/vm-connect-bin",
+    "build": "bun build ./src/cli.ts --target bun --minify --external @opentui/core --outdir ./dist",
+    "build:binary": "bash ../../scripts/build-binary.sh",
     "check": "tsc --noEmit",
     "dev": "bun run ./src/cli.ts --help",
     "mcp": "bun run ./src/mcp.ts",
@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
+    "@opentui/core": "^0.5.11",
     "commander": "^14.0.0",
     "ssh2": "^1.17.0",
     "zod": "^3.23.8"

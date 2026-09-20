@@ -2,6 +2,13 @@
 
 ## RECENT CHANGES
 
+2026-09-20 — file tools: vm_file_read / vm_file_edit (exact-match + backup) + vm_search (ripgrep), path guardrails, CLI mirrors, 35 pass
+2026-09-20 — secret guard: .env/.ssh blocked in exec+spawn+file tools, env/printenv/set dumps refused, audit+output-log redaction (backups exact), 45 pass
+2026-09-20 — one-prompt agent setup: paste-in prompt in README + interactive Agent Prompt Builder in web app
+2026-09-20 — vm_list agent tool: registered VMs + active mark over MCP (11 tools), 45 pass
+2026-09-20 — OpenTUI vm setup/ui: full VM manager TUI (@opentui/core) with .pem key support, save/test/use/rm, bundled into release binaries via scripts/build-binary.sh
+2026-09-20 — TUI key validation: any private key format accepted (ed25519/rsa/ecdsa), extension check fixed to filename-only so ~/.ssh/id_ed25519 no longer warns
+
 2026-09-20 — vm-connect-mcp scaffold: Bun TS CLI+MCP over SSH+tmux, 6 tools, blocklist+truncate+audit
 2026-09-20 — vm-connect registered as MCP in opencode, pi (shared global), antigravity; vm/vm-connect symlinked globally
 2026-09-20 — vm-connect added to zcode user config ~/.zcode/cli/config.json

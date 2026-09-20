@@ -9,8 +9,8 @@
   "scripts": {
     "build": "bun run build:cli",
     "build:all": "bun run build:cli && bun run build:web",
-    "build:cli": "bun run --filter vm-connect-mcp build && bun build ./packages/cli/src/cli.ts --target bun --minify --outdir ./dist",
-    "build:binary": "bun build ./packages/cli/src/cli.ts --compile --outfile ./dist/vm-bin",
+    "build:cli": "bun run --filter vm-connect-mcp build && bun build ./packages/cli/src/cli.ts --target bun --minify --external @opentui/core --outdir ./dist",
+    "build:binary": "bash ./scripts/build-binary.sh",
     "build:web": "bun run --filter web build",
     "check": "tsc --noEmit && bun run --filter web check",
     "check:cli": "tsc --noEmit",

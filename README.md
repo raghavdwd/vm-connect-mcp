@@ -82,6 +82,9 @@ Commands starting with a dash need `--` first: `vm exec -- -my-flag`.
 | `vm session kill <id>` | Kill a session (CLI-only, not exposed to agents) |
 | `vm push <local> <remote>` | Upload a file |
 | `vm pull <remote> <local>` | Download a file |
+| `vm read <remote> [--offset N] [--lines N]` | Read remote text file, paged by lines |
+| `vm edit <remote> --old S --new S [--replace-all]` | Exact-string edit, backup in logs |
+| `vm search <pattern> [path] [--glob G] [--limit N]` | Ripgrep search on the VM |
 | `vm ssh` | Interactive SSH into the active VM |
 | `vm mcp` | Start the MCP stdio server (hidden; used by agent configs) |
 
@@ -105,6 +108,40 @@ into chat or docs.
 
 ## Agent (MCP) setup
 
+### One-prompt setup (paste into any agent)
+
+Copy-paste this into your coding agent. It installs, connects, self-registers,
+verifies, and guides you further. Fill in your VM details or let the agent ask:
+
+```text
+Set up vm-connect-mcp on this machine so you can run commands on my Ubuntu
+VM over SSH. Work end to end and guide me whenever you need input.
+
+1. Install: check `vm --help`. If missing, install:
+   Linux/macOS:
+   curl -fsSL https://raw.githubusercontent.com/raghavdwd/vm-connect-mcp/main/scripts/install.sh | bash
+   Windows PowerShell:
+   irm https://raw.githubusercontent.com/raghavdwd/vm-connect-mcp/main/scripts/install.ps1 | iex
+2. Connect: if I haven't given them, ASK me for VM host, SSH user, and
+   private key path (never ask for key contents). Then run:
+   vm add default --host <HOST> --user <USER> --key <KEY_PATH>
+   (If the VM already exists: `vm list`, then `vm use <name>`.)
+3. Verify: `vm info` and `vm exec -- uname -a` must succeed.
+4. Self-register: add the MCP stdio server to YOUR OWN agent config
+   (whichever agent you are — opencode, pi, Claude, Cursor, Antigravity,
+   zcode): command `<VM_CMD>` (e.g. ~/.local/bin/vm), args `["mcp"]`.
+   If you cannot edit your own config, print the exact JSON snippet for
+   me to paste instead.
+5. Confirm: list your MCP tools (expect vm_exec, vm_session_spawn/send/poll,
+   vm_file_push/pull/read/edit, vm_search, vm_list, vm_info), call vm_info, summarize
+   what you can now do, and tell me what to try next.
+Rules: never print private key contents; keep host IPs out of docs;
+refuse .env / .ssh reads and rm-rf-style destructive commands.
+```
+
+Prefer a UI? The showcase app builds this prompt for you with your values
+filled in (see Agent Prompt Builder section).
+
 Register the stdio server in your agent framework. Example for
 `~/.config/opencode/opencode.jsonc`:
 
@@ -118,7 +155,7 @@ Register the stdio server in your agent framework. Example for
 }
 ```
 
-### Tools (7)
+### Tools (11)
 
 | Tool | Description |
 |---|---|
@@ -128,6 +165,10 @@ Register the stdio server in your agent framework. Example for
 | `vm_session_poll` | Read output (`id`, `lines?`) |
 | `vm_file_push` | Upload (`localPath`, `remotePath`) |
 | `vm_file_pull` | Download (`remotePath`, `localPath`) |
+| `vm_file_read` | Read remote text file (`remotePath`, `offset?`, `limit?`, `cwd?`) |
+| `vm_file_edit` | Exact-string edit (`remotePath`, `oldString`, `newString`, `replaceAll?`, `cwd?`) |
+| `vm_search` | Ripgrep search (`pattern`, `path?`, `glob?`, `limit?`, `cwd?`) |
+| `vm_list` | List registered VMs, `*` marks active (no params) |
 | `vm_info` | OS / user / hostname / IP / RAM / disk (no params) |
 
 Every result is stamped `[vm:<name>]` so agents always know which VM answered.
@@ -140,6 +181,15 @@ No approval gate — blocklist + audit only.
 - **Blocklist** (`src/safety.ts`): `rm -rf /`, `mkfs`, `dd ... of=/dev/…`,
   fork bombs, `shutdown` / `reboot` / `halt`. Matches are refused before any
   SSH happens.
+- **Path guardrails:** `read` / `edit` / `search` / `push` / `pull` refuse `..` traversal,
+  `~/.ssh/`, `*.pem` / `*.key`, `/etc/shadow`-class paths, `/proc/` + `/sys/`,
+  plus `.env` files (`.env`, `.env.local`, `*.env`, `.envrc`).
+  Edits cap at 256 KB, reads at 512 KB, binaries refused.
+- **Exec secret guard:** `exec` / `session spawn` refuse `.env` file access,
+  `.ssh` access, and bare `env` / `printenv` / `set` dumps — refused with
+  "developer has not allowed … operation strictly refused".
+- **Audit redaction:** `audit.log` entries scrub `PASSWORD=` / `TOKEN=`-style
+  values and private-key blocks (`[REDACTED]`).
 - **Truncation:** command output is capped at 32k chars; overflow spills to a
   full log file whose path is returned with the result.
 - **Audit:** every CLI and MCP action appends to `~/.vm-connect/audit.log`;

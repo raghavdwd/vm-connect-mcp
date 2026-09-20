@@ -2,8 +2,9 @@
 import { Command } from "commander";
 import { addVm, getActive, listVms, migrateLegacy, readVm, resolveVm, rmVm, setActive } from "./config.ts";
 import { runMcp } from "./mcp.ts";
-import { audit, checkBlocked, saveLog, truncate } from "./safety.ts";
-import { sshExec, sshPull, sshPush } from "./ssh.ts";
+import { MAX_EDIT_BYTES, applyEdit, resolveRemote, sliceText } from "./files.ts";
+import { audit, checkBlocked, checkPath, checkSensitiveExec, saveLog, truncate } from "./safety.ts";
+import { sshExec, sshPull, sshPush, sshReadText, sshSearch, sshWriteText } from "./ssh.ts";
 import { fetchVmInfo, formatVmInfo } from "./vm_info.ts";
 import { sessionKill, sessionPoll, sessionSend, sessionSpawn } from "./tmux.ts";
 import { randomUUID } from "node:crypto";
@@ -99,14 +100,14 @@ vmOpt(cwdOpt(
     .option("--timeout <ms>", "60000")
 )).action(async (cmdParts: string[], o) => {
   const cmd = cmdParts.join(" ");
-  const blocked = checkBlocked(cmd);
+  const blocked = checkBlocked(cmd) ?? checkSensitiveExec(cmd);
   if (blocked) { console.error(blocked); process.exit(1); }
   const cfg = await vmFlags(o);
   const r = await sshExec(cfg, cmd, Number(o.timeout ?? 60000), { cwd: o.cwd });
   const full = `$ ${cmd}\n${r.stdout}${r.stderr}`;
   const t = truncate(full);
   const id = randomUUID().slice(0, 8);
-  const logPath = await saveLog(id, full);
+  const logPath = await saveLog(id, full, { redact: true });
   await audit({ tool: "exec", vm: cfg.name, cmd, code: r.code, truncated: t.truncated, log: logPath });
   process.stdout.write(t.text + (t.truncated ? `\n[full log: ${logPath}]` : ""));
   process.exit(r.code);
@@ -118,7 +119,12 @@ vmOpt(cwdOpt(
   sess.command("spawn <id> [cmd...]").description("Create a detached tmux session")
 )).action(async (id: string, cmdParts: string[], o) => {
   const cfg = await vmFlags(o);
-  const r = await sessionSpawn(cfg, id, cmdParts.join(" ") || undefined);
+  const cmd = cmdParts.join(" ") || undefined;
+  if (cmd) {
+    const blocked = checkBlocked(cmd) ?? checkSensitiveExec(cmd);
+    if (blocked) { console.error(blocked); process.exit(1); }
+  }
+  const r = await sessionSpawn(cfg, id, cmd);
   await audit({ tool: "session_spawn", vm: cfg.name, id });
   console.log(`[vm:${cfg.name}] ${r.stdout.trim()}`);
 });
@@ -153,6 +159,8 @@ vmOpt(
 vmOpt(cwdOpt(
   program.command("push <local> <remote>").description("Upload a local file to the VM")
 )).action(async (local: string, remote: string, o) => {
+  const bad = checkPath(local) ?? checkPath(remote);
+  if (bad) { console.error(bad); process.exit(1); }
   const cfg = await vmFlags(o);
   await sshPush(cfg, local, remote);
   await audit({ tool: "file_push", vm: cfg.name, local, remote });
@@ -162,10 +170,70 @@ vmOpt(cwdOpt(
 vmOpt(cwdOpt(
   program.command("pull <remote> <local>").description("Download a VM file to local")
 )).action(async (remote: string, local: string, o) => {
+  const bad = checkPath(remote) ?? checkPath(local);
+  if (bad) { console.error(bad); process.exit(1); }
   const cfg = await vmFlags(o);
   await sshPull(cfg, remote, local);
   await audit({ tool: "file_pull", vm: cfg.name, remote, local });
   console.log(`[vm:${cfg.name}] pulled`);
+});
+
+vmOpt(cwdOpt(
+  program.command("read <remote>").description("Read a remote text file (paged by lines)")
+    .option("--offset <n>", "first line (1-indexed)", "1")
+    .option("--lines <n>", "max lines", "200")
+)).action(async (remote: string, o) => {
+  const bad = checkPath(remote);
+  if (bad) { console.error(bad); process.exit(1); }
+  const cfg = await vmFlags(o);
+  const content = await sshReadText(cfg, resolveRemote(remote, o.cwd));
+  const s = sliceText(content, Number(o.offset ?? 1), Number(o.lines ?? 200));
+  const t = truncate(s.text);
+  process.stdout.write(t.text + `\n[vm:${cfg.name} lines:${s.start}-${s.end}/${s.total}]`);
+});
+
+vmOpt(cwdOpt(
+  program.command("edit <remote>").description("Exact-string edit of a remote text file")
+    .requiredOption("--old <s>", "string to replace")
+    .requiredOption("--new <s>", "replacement string")
+    .option("--replace-all", "replace every occurrence", false)
+)).action(async (remote: string, o) => {
+  const bad = checkPath(remote);
+  if (bad) { console.error(bad); process.exit(1); }
+  if (Buffer.byteLength(o.new, "utf8") > MAX_EDIT_BYTES) { console.error("write too large — push it instead"); process.exit(1); }
+  const cfg = await vmFlags(o);
+  const target = resolveRemote(remote, o.cwd);
+  const content = await sshReadText(cfg, target);
+  let result: { text: string; count: number };
+  try {
+    result = applyEdit(content, o.old, o.new, Boolean(o.replaceAll));
+  } catch (e) {
+    console.error((e as Error).message);
+    process.exit(1);
+  }
+  const id = randomUUID().slice(0, 8);
+  const backup = await saveLog(`${id}.bak`, content);
+  await sshWriteText(cfg, target, result.text);
+  await audit({ tool: "file_edit", vm: cfg.name, remotePath: target, count: result.count, backup });
+  console.log(`[vm:${cfg.name}] replaced ${result.count} occurrence${result.count === 1 ? "" : "s"} backup:${backup}`);
+});
+
+vmOpt(cwdOpt(
+  program.command("search <pattern> [path]").description("Ripgrep search on the VM")
+    .option("--glob <g>", "glob filter (repeat with comma or multiple flags)")
+    .option("--limit <n>", "max matches", "100")
+)).action(async (pattern: string, path: string | undefined, o) => {
+  if (!pattern.trim()) { console.error("pattern must not be empty"); process.exit(1); }
+  const bad = (path ? checkPath(path) : null) ?? (o.cwd ? checkPath(o.cwd) : null);
+  if (bad) { console.error(bad); process.exit(1); }
+  const cfg = await vmFlags(o);
+  const globs: string[] | undefined = o.glob
+    ? String(o.glob).split(",").map((g: string) => g.trim()).filter(Boolean)
+    : undefined;
+  const r = await sshSearch(cfg, pattern, { path, glob: globs, limit: Number(o.limit ?? 100), cwd: o.cwd });
+  const t = truncate((r.stdout + r.stderr).trim() || "(no matches)");
+  process.stdout.write(t.text + `\n[vm:${cfg.name} exit:${r.code}]`);
+  await audit({ tool: "search", vm: cfg.name, pattern, code: r.code });
 });
 
 vmOpt(
@@ -180,5 +248,32 @@ vmOpt(
 });
 
 program.command("mcp", { hidden: true }).action(async () => { await runMcp(); });
+
+async function runSetupUi(mode: "setup" | "manager") {
+  if (!process.stdin.isTTY) {
+    console.error("TUI needs an interactive terminal — use `vm add <name> --host H --user U` instead");
+    process.exit(1);
+  }
+  try {
+    // tui.ts is bundled; @opentui/core stays external (see build scripts) so
+    // non-TUI commands never pay load cost and the slim bundle stays ~0.75M.
+    const { runTui } = await import("./tui.ts");
+    await runTui(mode);
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (/cannot find|not found|could not resolve/i.test(msg)) {
+      console.error("TUI unavailable in this standalone binary — use `vm add <name> --host H --user U` flags or install from source");
+    } else {
+      console.error(msg);
+    }
+    process.exit(1);
+  }
+}
+
+program.command("setup").description("Interactive VM setup wizard (OpenTUI)")
+  .action(() => runSetupUi("setup"));
+
+program.command("ui").description("Interactive VM manager: list, edit, test, activate (OpenTUI)")
+  .action(() => runSetupUi("manager"));
 
 await program.parseAsync(process.argv);
