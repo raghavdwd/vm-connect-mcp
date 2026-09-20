@@ -11,3 +11,5 @@
 2026-09-20 — ssh noise filter: -lic + strip job-control lines in sshExec, 19 pass
 2026-09-20 — fixed vm wrappers: broken dist/vm-connect symlinks replaced with bun wrappers
 2026-09-20 — README added: install, CLI+MCP reference, safety, troubleshooting
+2026-09-20 — install.sh + install.ps1: source-build installers, bun bootstrap, verified in sandbox
+2026-09-20 — installers moved into scripts/, README URLs updated

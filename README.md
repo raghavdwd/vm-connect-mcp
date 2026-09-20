@@ -10,10 +10,30 @@ agent tools.
 - SSH access to an Ubuntu VM (key-based auth recommended)
 - `tmux` installed on the VM (only needed for stateful sessions)
 
-## Install from source
+## Install
+
+Linux / macOS:
 
 ```sh
-git clone <repo-url> vm-connect-mcp
+curl -fsSL https://raw.githubusercontent.com/raghavdwd/vm-connect-mcp/main/scripts/install.sh | bash
+```
+
+Native Windows (PowerShell):
+
+```powershell
+irm https://raw.githubusercontent.com/raghavdwd/vm-connect-mcp/main/scripts/install.ps1 | iex
+```
+
+The scripts auto-install Bun if missing, clone the repo (`~/vm-connect-mcp`),
+`bun install` + `bun run build`, and create the `vm` / `vm-connect` commands.
+Windows users on WSL2 or Git Bash can use `install.sh` instead. Useful flags:
+`--dir PATH` (checkout location), `--bin-dir PATH` (where commands go),
+`--skip-bun`.
+
+Manual equivalent:
+
+```sh
+git clone https://github.com/raghavdwd/vm-connect-mcp.git
 cd vm-connect-mcp
 bun install
 bun run build        # slim bundle -> dist/cli.js (~0.74 MB)
