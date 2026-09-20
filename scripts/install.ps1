@@ -1,13 +1,15 @@
 # vm-connect-mcp installer — native Windows (PowerShell 5.1+).
 #
 # Usage:
-#   .\install.ps1 [-RepoUrl URL] [-InstallDir PATH] [-BinDir PATH] [-SkipBun]
+#   .\install.ps1 [-Binary] [-Source] [-RepoUrl URL] [-InstallDir PATH] [-BinDir PATH] [-SkipBun]
 # Defaults: repo github.com/raghavdwd/vm-connect-mcp, dir ~\vm-connect-mcp,
 # bin %LocalAppData%\vm-connect\bin (added to user PATH).
 param(
   [string]$RepoUrl = "https://github.com/raghavdwd/vm-connect-mcp.git",
   [string]$InstallDir = (Join-Path $HOME "vm-connect-mcp"),
   [string]$BinDir = (Join-Path $env:LocalAppData "vm-connect\bin"),
+  [switch]$Binary,
+  [switch]$Source,
   [switch]$SkipBun
 )
 $ErrorActionPreference = "Stop"
@@ -20,13 +22,12 @@ function Refresh-Path {
 function Try-DownloadBinary {
   $BinName = "vm-connect-windows-x64.exe"
   $Url = "https://github.com/raghavdwd/vm-connect-mcp/releases/latest/download/$BinName"
-  Write-Host "checking prebuilt standalone binary ($BinName)..."
+  Write-Host "downloading prebuilt binary ($BinName)..."
   New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
   $ExePath = Join-Path $BinDir "vm.exe"
   try {
     Invoke-WebRequest -Uri $Url -OutFile $ExePath -UseBasicParsing -ErrorAction Stop
     Copy-Item -Path $ExePath -Destination (Join-Path $BinDir "vm-connect.exe") -Force
-    Write-Host "installed prebuilt binary into $ExePath"
     return $true
   } catch {
     if (Test-Path $ExePath) { Remove-Item -Force $ExePath }
@@ -34,7 +35,30 @@ function Try-DownloadBinary {
   }
 }
 
-if (-not (Test-Path (Join-Path $InstallDir "packages\cli\src\cli.ts"))) {
+$Mode = ""
+if ($Binary) { $Mode = "binary" }
+elseif ($Source) { $Mode = "source" }
+elseif (-not (Test-Path (Join-Path $InstallDir "packages\cli\src\cli.ts"))) {
+  Write-Host ""
+  Write-Host "========================================" -ForegroundColor Cyan
+  Write-Host "  vm-connect-mcp installation" -ForegroundColor Cyan
+  Write-Host "========================================" -ForegroundColor Cyan
+  Write-Host "Choose installation method:"
+  Write-Host "  1) Prebuilt binary [Recommended] (instant, zero dependencies)"
+  Write-Host "  2) Build from source (requires Git & Bun)"
+  $inputChoice = Read-Host "Enter choice [1-2] (default: 1)"
+  if ($inputChoice -eq "2" -or $inputChoice -eq "source") {
+    $Mode = "source"
+  } else {
+    $Mode = "binary"
+  }
+  Write-Host ""
+} else {
+  $Mode = "source"
+}
+
+if ($Mode -eq "binary") {
+  Write-Host "installing via prebuilt binary..."
   if (Try-DownloadBinary) {
     $userPath = [System.Environment]::GetEnvironmentVariable("Path", "User")
     if (($userPath -split ";" | ForEach-Object { $_.TrimEnd('\') }) -notcontains $BinDir.TrimEnd('\')) {
@@ -43,12 +67,20 @@ if (-not (Test-Path (Join-Path $InstallDir "packages\cli\src\cli.ts"))) {
     }
     Refresh-Path
     & (Join-Path $BinDir "vm.exe") --help | Out-Null
-    Write-Host "installed. next: vm add default --host <HOST> --user ubuntu --key ~/.ssh/id_ed25519"
+    Write-Host "installed successfully to $BinDir\vm.exe."
+    Write-Host "next: vm add default --host <HOST> --user ubuntu --key ~/.ssh/id_ed25519"
     exit 0
+  } else {
+    Write-Host "prebuilt binary download failed (release asset not found or network error)." -ForegroundColor Yellow
+    $fallback = Read-Host "Would you like to build from source instead? [y/N]"
+    if ($fallback -notmatch "^[yY]") {
+      Write-Host "aborted."
+      exit 1
+    }
   }
-  Write-Host "prebuilt binary not yet published; falling back to lean source build..."
 }
 
+Write-Host "building from source..."
 if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
   throw "missing: git — install it first: https://git-scm.com"
 }
@@ -96,4 +128,5 @@ if (($userPath -split ";" | ForEach-Object { $_.TrimEnd('\') }) -notcontains $Bi
 Refresh-Path
 
 & (Join-Path $BinDir "vm.cmd") --help | Out-Null
-Write-Host "installed. next: vm add default --host <HOST> --user ubuntu --key ~/.ssh/id_ed25519"
+Write-Host "installed successfully from source."
+Write-Host "next: vm add default --host <HOST> --user ubuntu --key ~/.ssh/id_ed25519"

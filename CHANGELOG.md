@@ -17,3 +17,4 @@
 2026-09-20 — apps/web UI: minimalist Jet Black + Terminal Emerald showcase, Tabler icons, interactive 7-tool stdio terminal simulator, Raycast-style spec matrix, safety deck, and agent configurator
 2026-09-20 — streamlined installers: install.sh & install.ps1 skip web dependencies, default build targets CLI bundle only (~740KB), zero Next.js overhead for end users
 2026-09-20 — GitHub Actions release workflow: multi-OS matrix (Linux x64/arm64, macOS arm64/x64, Windows x64) compiles standalone binaries on tag push; install scripts fetch prebuilt binary directly
+2026-09-20 — interactive installer prompt: install.sh & install.ps1 prompt user to choose between prebuilt binary (instant, no clone) and source build (--binary / --source flags supported)
