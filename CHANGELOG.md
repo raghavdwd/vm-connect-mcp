@@ -15,3 +15,5 @@
 2026-09-20 — installers moved into scripts/, README URLs updated
 2026-09-20 — monorepo refactor: packages/cli + apps/web (Next.js 16 App Router) initialized, bun workspaces configured, 19 tests pass, tsc clean
 2026-09-20 — apps/web UI: minimalist Jet Black + Terminal Emerald showcase, Tabler icons, interactive 7-tool stdio terminal simulator, Raycast-style spec matrix, safety deck, and agent configurator
+2026-09-20 — streamlined installers: install.sh & install.ps1 skip web dependencies, default build targets CLI bundle only (~740KB), zero Next.js overhead for end users
+2026-09-20 — GitHub Actions release workflow: multi-OS matrix (Linux x64/arm64, macOS arm64/x64, Windows x64) compiles standalone binaries on tag push; install scripts fetch prebuilt binary directly
