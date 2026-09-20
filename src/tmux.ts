@@ -1,9 +1,8 @@
 import type { VmConfig } from "./config.ts";
+import { shQuote } from "./safety.ts";
 import { sshExec } from "./ssh.ts";
+export { shQuote };
 
-export function shQuote(s: string): string {
-  return `'${s.replace(/'/g, `'\\''`)}'`;
-}
 
 export async function sessionSpawn(cfg: VmConfig, id: string, cmd?: string) {
   const start = cmd ? shQuote(cmd) : "";

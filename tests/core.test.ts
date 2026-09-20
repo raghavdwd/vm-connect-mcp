@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import { checkBlocked, truncate } from "./safety.ts";
-import { shQuote } from "./tmux.ts";
+import { checkBlocked, truncate } from "../src/safety.ts";
+import { shQuote } from "../src/tmux.ts";
 
 describe("safety", () => {
   test("blocks rm -rf /", () => {

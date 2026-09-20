@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { Client } from "ssh2";
 import type { VmConfig } from "./config.ts";
+import { shQuote } from "./safety.ts";
 
 export type ExecResult = { code: number; stdout: string; stderr: string };
 
@@ -27,12 +28,28 @@ function connect(cfg: VmConfig): Promise<Client> {
   });
 }
 
-export async function sshExec(cfg: VmConfig, command: string, timeoutMs = 60_000): Promise<ExecResult> {
+const NOISE_PATTERNS = [/cannot set terminal process group.*/, /no job control in this shell.*/];
+
+export function filterNoise(stderr: string): string {
+  return stderr
+    .split("\n")
+    .filter((line) => !NOISE_PATTERNS.some((re) => re.test(line)))
+    .join("\n");
+}
+
+export function wrapCommand(command: string, cwd?: string): string {
+  const inner = cwd ? `cd ${shQuote(cwd)} && ${command}` : command;
+  const b64 = Buffer.from(inner).toString("base64");
+  return `bash -lic 'eval "$(base64 -d <<< "${b64}")"'`;
+}
+
+export async function sshExec(cfg: VmConfig, command: string, timeoutMs = 60_000, opts?: { cwd?: string }): Promise<ExecResult> {
   const client = await connect(cfg);
   try {
     return await new Promise<ExecResult>((resolve, reject) => {
+      const cmd = wrapCommand(command, opts?.cwd);
       const timer = setTimeout(() => reject(new Error(`timeout after ${timeoutMs}ms`)), timeoutMs);
-      client.exec(command, (err, channel) => {
+      client.exec(cmd, (err, channel) => {
         if (err) {
           clearTimeout(timer);
           reject(err);
@@ -44,7 +61,7 @@ export async function sshExec(cfg: VmConfig, command: string, timeoutMs = 60_000
         channel.stderr.on("data", (d: Buffer) => (stderr += d.toString()));
         channel.on("close", (code: number) => {
           clearTimeout(timer);
-          resolve({ code: code ?? 0, stdout, stderr });
+          resolve({ code: code ?? 0, stdout, stderr: filterNoise(stderr) });
         });
       });
     });

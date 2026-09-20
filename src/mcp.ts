@@ -1,72 +1,89 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
-import { loadConfig } from "./config.ts";
+import { resolveVm } from "./config.ts";
 import { audit, checkBlocked, saveLog, truncate } from "./safety.ts";
 import { sshExec, sshPull, sshPush } from "./ssh.ts";
 import { sessionKill, sessionPoll, sessionSend, sessionSpawn } from "./tmux.ts";
+import { fetchVmInfo, formatVmInfo } from "./vm_info.ts";
 import { randomUUID } from "node:crypto";
 
-const conn = { host: z.string().optional(), user: z.string().optional(), port: z.number().optional(), keyPath: z.string().optional() };
+export const toolSchemas = {
+  vm_exec: { command: z.string(), timeoutMs: z.number().optional(), cwd: z.string().optional() },
+  vm_session_spawn: { id: z.string(), cmd: z.string().optional() },
+  vm_session_send: { id: z.string(), input: z.string() },
+  vm_session_poll: { id: z.string(), lines: z.number().optional() },
+  vm_file_push: { localPath: z.string(), remotePath: z.string() },
+  vm_file_pull: { remotePath: z.string(), localPath: z.string() },
+  vm_info: {},
+};
 
 export async function runMcp() {
   const server = new McpServer({ name: "vm-connect", version: "0.1.0" });
 
-  server.tool("vm_exec", "Run one-shot command on VM over SSH", { command: z.string(), timeoutMs: z.number().optional(), ...conn },
-    async ({ command, timeoutMs, host, user, port, keyPath }) => {
+  server.tool("vm_exec", "Run one-shot command on the active VM over SSH", toolSchemas.vm_exec,
+    async ({ command, timeoutMs, cwd }) => {
       const blocked = checkBlocked(command);
       if (blocked) return { content: [{ type: "text" as const, text: blocked }], isError: true };
-      const cfg = await loadConfig({ host, user, port, keyPath });
-      const r = await sshExec(cfg, command, timeoutMs ?? 60_000);
+      const cfg = await resolveVm();
+      const r = await sshExec(cfg, command, timeoutMs ?? 60_000, { cwd });
       const full = `$ ${command}\n${r.stdout}${r.stderr}`;
       const t = truncate(full);
       const id = randomUUID().slice(0, 8);
       const log = await saveLog(id, full);
-      await audit({ tool: "vm_exec", command, code: r.code, truncated: t.truncated, log });
-      return { content: [{ type: "text" as const, text: t.text + `\n[exit:${r.code}${t.truncated ? ` full:${log}` : ""}]` }] };
+      await audit({ tool: "vm_exec", vm: cfg.name, command, code: r.code, truncated: t.truncated, log });
+      return { content: [{ type: "text" as const, text: t.text + `\n[vm:${cfg.name} exit:${r.code}${t.truncated ? ` full:${log}` : ""}]` }] };
     });
 
-  server.tool("vm_session_spawn", "Spawn persistent tmux session on VM", { id: z.string(), cmd: z.string().optional(), ...conn },
-    async ({ id, cmd, host, user, port, keyPath }) => {
-      const cfg = await loadConfig({ host, user, port, keyPath });
+  server.tool("vm_session_spawn", "Spawn persistent tmux session on active VM", toolSchemas.vm_session_spawn,
+    async ({ id, cmd }) => {
+      const cfg = await resolveVm();
       const r = await sessionSpawn(cfg, id, cmd);
-      await audit({ tool: "vm_session_spawn", id });
-      return { content: [{ type: "text" as const, text: r.stdout }] };
+      await audit({ tool: "vm_session_spawn", vm: cfg.name, id });
+      return { content: [{ type: "text" as const, text: `[vm:${cfg.name}] ${r.stdout.trim()}` }] };
     });
 
-  server.tool("vm_session_send", "Send input to tmux session", { id: z.string(), input: z.string(), ...conn },
-    async ({ id, input, host, user, port, keyPath }) => {
-      const cfg = await loadConfig({ host, user, port, keyPath });
+  server.tool("vm_session_send", "Send input to tmux session", toolSchemas.vm_session_send,
+    async ({ id, input }) => {
+      const cfg = await resolveVm();
       await sessionSend(cfg, id, input);
-      await audit({ tool: "vm_session_send", id });
-      return { content: [{ type: "text" as const, text: "sent" }] };
+      await audit({ tool: "vm_session_send", vm: cfg.name, id });
+      return { content: [{ type: "text" as const, text: `[vm:${cfg.name}] sent` }] };
     });
 
-  server.tool("vm_session_poll", "Read tmux session output", { id: z.string(), lines: z.number().optional(), ...conn },
-    async ({ id, lines, host, user, port, keyPath }) => {
-      const cfg = await loadConfig({ host, user, port, keyPath });
+  server.tool("vm_session_poll", "Read tmux session output", toolSchemas.vm_session_poll,
+    async ({ id, lines }) => {
+      const cfg = await resolveVm();
       const r = await sessionPoll(cfg, id, lines ?? 200);
       const t = truncate(r.output);
-      return { content: [{ type: "text" as const, text: t.text + `\n[alive:${r.alive}]` }] };
+      return { content: [{ type: "text" as const, text: t.text + `\n[vm:${cfg.name} alive:${r.alive}]` }] };
     });
 
-  server.tool("vm_file_push", "Upload local file to VM", { localPath: z.string(), remotePath: z.string(), ...conn },
-    async ({ localPath, remotePath, host, user, port, keyPath }) => {
-      const cfg = await loadConfig({ host, user, port, keyPath });
+  server.tool("vm_file_push", "Upload local file to active VM", toolSchemas.vm_file_push,
+    async ({ localPath, remotePath }) => {
+      const cfg = await resolveVm();
       await sshPush(cfg, localPath, remotePath);
-      await audit({ tool: "vm_file_push", localPath, remotePath });
-      return { content: [{ type: "text" as const, text: "pushed" }] };
+      await audit({ tool: "vm_file_push", vm: cfg.name, localPath, remotePath });
+      return { content: [{ type: "text" as const, text: `[vm:${cfg.name}] pushed` }] };
     });
 
-  server.tool("vm_file_pull", "Download VM file to local", { remotePath: z.string(), localPath: z.string(), ...conn },
-    async ({ remotePath, localPath, host, user, port, keyPath }) => {
-      const cfg = await loadConfig({ host, user, port, keyPath });
+  server.tool("vm_file_pull", "Download file from active VM to local", toolSchemas.vm_file_pull,
+    async ({ remotePath, localPath }) => {
+      const cfg = await resolveVm();
       await sshPull(cfg, remotePath, localPath);
-      await audit({ tool: "vm_file_pull", remotePath, localPath });
-      return { content: [{ type: "text" as const, text: "pulled" }] };
+      await audit({ tool: "vm_file_pull", vm: cfg.name, remotePath, localPath });
+      return { content: [{ type: "text" as const, text: `[vm:${cfg.name}] pulled` }] };
     });
 
-  // keep session_kill as CLI-only to keep MCP surface at 6; agents use spawn/send/poll cycle
+  server.tool("vm_info", "Report basic facts about the active VM", toolSchemas.vm_info,
+    async () => {
+      const cfg = await resolveVm();
+      const info = await fetchVmInfo(cfg);
+      await audit({ tool: "vm_info", vm: cfg.name });
+      return { content: [{ type: "text" as const, text: formatVmInfo(cfg.name, info) }] };
+    });
+
+  // keep session_kill as CLI-only to keep MCP surface at 7
   void sessionKill;
 
   const transport = new StdioServerTransport();
