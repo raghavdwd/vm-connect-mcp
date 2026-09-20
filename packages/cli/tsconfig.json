@@ -11,8 +11,5 @@
     "target": "ESNext",
     "types": ["bun"]
   },
-  "include": [
-    "packages/cli/src/**/*.ts",
-    "packages/cli/tests/**/*.ts"
-  ]
+  "include": ["src/**/*.ts", "tests/**/*.ts"]
 }

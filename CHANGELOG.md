@@ -13,3 +13,5 @@
 2026-09-20 — README added: install, CLI+MCP reference, safety, troubleshooting
 2026-09-20 — install.sh + install.ps1: source-build installers, bun bootstrap, verified in sandbox
 2026-09-20 — installers moved into scripts/, README URLs updated
+2026-09-20 — monorepo refactor: packages/cli + apps/web (Next.js 16 App Router) initialized, bun workspaces configured, 19 tests pass, tsc clean
+2026-09-20 — apps/web UI: minimalist Jet Black + Terminal Emerald showcase, Tabler icons, interactive 7-tool stdio terminal simulator, Raycast-style spec matrix, safety deck, and agent configurator

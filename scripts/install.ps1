@@ -31,7 +31,7 @@ if (-not (Get-Command bun -ErrorAction SilentlyContinue)) {
 }
 $BunBin = (Get-Command bun).Source
 
-if (Test-Path (Join-Path $InstallDir "src\cli.ts")) {
+if ((Test-Path (Join-Path $InstallDir "packages\cli\src\cli.ts")) -or (Test-Path (Join-Path $InstallDir "src\cli.ts"))) {
   Write-Host "using existing checkout: $InstallDir"
 } elseif (Test-Path $InstallDir) {
   throw "error: $InstallDir exists but is not a vm-connect-mcp checkout"

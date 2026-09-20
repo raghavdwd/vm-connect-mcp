@@ -48,11 +48,11 @@ need bun "install Bun: https://bun.sh (or rerun without --skip-bun)"
 BUN_BIN="$(command -v bun)"
 
 # Run in place when invoked from a checkout.
-if [ "$DIR_GIVEN" -eq 0 ] && [ -f ./src/cli.ts ] && [ -f ./package.json ]; then
+if [ "$DIR_GIVEN" -eq 0 ] && ([ -f ./packages/cli/src/cli.ts ] || [ -f ./src/cli.ts ]) && [ -f ./package.json ]; then
   INSTALL_DIR="$PWD"
 fi
 
-if [ -f "$INSTALL_DIR/src/cli.ts" ]; then
+if [ -f "$INSTALL_DIR/packages/cli/src/cli.ts" ] || [ -f "$INSTALL_DIR/src/cli.ts" ]; then
   echo "using existing checkout: $INSTALL_DIR"
 elif [ -e "$INSTALL_DIR" ]; then
   echo "error: $INSTALL_DIR exists but is not a vm-connect-mcp checkout" >&2

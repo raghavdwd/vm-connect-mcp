@@ -1,6 +1,22 @@
 {
-  "bin": {
-    "vm-connect": "./src/cli.ts"
+  "name": "vm-connect-workspace",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "bun run build:cli && bun run build:web",
+    "build:cli": "bun run --filter vm-connect-mcp build && bun build ./packages/cli/src/cli.ts --target bun --minify --outdir ./dist",
+    "build:binary": "bun run --filter vm-connect-mcp build:binary",
+    "build:web": "bun run --filter web build",
+    "check": "tsc --noEmit && bun run --filter web check",
+    "dev": "bun run --filter web dev",
+    "dev:cli": "bun run --filter vm-connect-mcp dev",
+    "dev:web": "bun run --filter web dev",
+    "mcp": "bun run ./packages/cli/src/mcp.ts",
+    "test": "bun test packages/cli"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
@@ -8,21 +24,12 @@
     "ssh2": "^1.17.0",
     "zod": "^3.23.8"
   },
+  "trustedDependencies": [
+    "cpu-features"
+  ],
   "devDependencies": {
     "@types/bun": "^1.2.0",
     "@types/ssh2": "^1.15.6",
     "typescript": "^5.6.0"
-  },
-  "name": "vm-connect-mcp",
-  "private": true,
-  "scripts": {
-    "build": "bun build ./src/cli.ts --target bun --minify --outdir ./dist",
-    "build:binary": "bun build ./src/cli.ts --compile --outfile ./dist/vm-connect-bin",
-    "check": "tsc --noEmit",
-    "dev": "bun run ./src/cli.ts --help",
-    "mcp": "bun run ./src/mcp.ts",
-    "test": "bun test"
-  },
-  "type": "module",
-  "version": "0.1.0"
+  }
 }
