@@ -1,0 +1,6 @@
+dist/
+node_modules/
+*.log
+.vm-connect/
+.env
+docs
