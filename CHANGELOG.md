@@ -6,6 +6,9 @@
 2026-09-20 — secret guard: .env/.ssh blocked in exec+spawn+file tools, env/printenv/set dumps refused, audit+output-log redaction (backups exact), 45 pass
 2026-09-20 — one-prompt agent setup: paste-in prompt in README + interactive Agent Prompt Builder in web app
 2026-09-20 — vm_list agent tool: registered VMs + active mark over MCP (11 tools), 45 pass
+2026-09-20 — session approval gate: per-session VM allowlist for agents (deny default, refusal teaches vm allow), vm allow/deny/approvals + TUI ^A/^X toggle, README + prompt builder loop docs
+2026-09-20 — self-approval fix: SID-free refusals + vm_approval_request pending queue, TTY-gated allow/deny, approvals --pending (12 tools)
+2026-09-20 — TUI list fix: VM list grows to fit (both VMs visible) + scroll cue; approvals --pending asks Y/N per request at a terminal
 2026-09-20 — OpenTUI vm setup/ui: full VM manager TUI (@opentui/core) with .pem key support, save/test/use/rm, bundled into release binaries via scripts/build-binary.sh
 2026-09-20 — TUI key validation: any private key format accepted (ed25519/rsa/ecdsa), extension check fixed to filename-only so ~/.ssh/id_ed25519 no longer warns
 

@@ -70,6 +70,8 @@ export async function runTui(mode: TuiMode): Promise<void> {
   const list = new SelectRenderable(renderer, {
     options: [],
     showDescription: false,
+    showScrollIndicator: true,
+    flexGrow: 1,
     backgroundColor: "transparent",
     textColor: "#CCCCCC",
     focusedBackgroundColor: "#1a1a1a",
